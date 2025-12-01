@@ -11,11 +11,30 @@ import AIAnalysisModal from './components/modals/AIAnalysisModal'
 import HistoryModal from './components/modals/HistoryModal'
 import ReportModal from './components/modals/ReportModal'
 import ColumnConfigModal from './components/modals/ColumnConfigModal'
+import ProjectSettingsModal from './components/modals/ProjectSettingsModal'
 import Notification from './components/Notification'
 import { testDataInitial } from './data/testData'
 import './App.css'
 
 function App() {
+  // Project settings with localStorage persistence
+  const [projectSettings, setProjectSettings] = useState(() => {
+    const saved = localStorage.getItem('projectSettings')
+    return saved ? JSON.parse(saved) : {
+      projectName: 'Release Testing Tracker',
+      projectSubtitle: 'Comprehensive testing management system',
+      organizationName: 'Your Organization',
+      bugTrackerUrl: 'https://mantis.fortinet.com/bug_view_page.php?bug_id=',
+      defaultItemsPerPage: 25
+    }
+  })
+
+  // Dark mode with localStorage persistence
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode')
+    return saved ? JSON.parse(saved) : false
+  })
+
   // State management
   const [testData, setTestData] = useState(testDataInitial)
   const [filteredData, setFilteredData] = useState(testDataInitial)
@@ -26,6 +45,9 @@ function App() {
     rc: '',
     status: ''
   })
+
+  // Bulk selection
+  const [selectedRows, setSelectedRows] = useState([])
 
   // Column configuration - dynamic RC columns
   const [columns, setColumns] = useState([
@@ -44,11 +66,26 @@ function App() {
     aiAnalysis: false,
     history: false,
     report: false,
-    columnConfig: false
+    columnConfig: false,
+    projectSettings: false
   })
 
   const [editingTest, setEditingTest] = useState(null)
   const [notification, setNotification] = useState(null)
+
+  // Save settings to localStorage
+  useEffect(() => {
+    localStorage.setItem('projectSettings', JSON.stringify(projectSettings))
+  }, [projectSettings])
+
+  useEffect(() => {
+    localStorage.setItem('darkMode', JSON.stringify(darkMode))
+    if (darkMode) {
+      document.documentElement.setAttribute('data-theme', 'dark')
+    } else {
+      document.documentElement.removeAttribute('data-theme')
+    }
+  }, [darkMode])
 
   // Apply filters whenever filters or testData changes
   useEffect(() => {
@@ -192,12 +229,84 @@ function App() {
     setTestData(updatedTestData)
   }
 
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode)
+  }
+
+  const saveProjectSettings = (newSettings) => {
+    setProjectSettings(newSettings)
+    closeModal('projectSettings')
+    showNotification('Project settings saved successfully!')
+  }
+
+  const handleSelectRow = (rowId) => {
+    setSelectedRows(prev => {
+      if (prev.includes(rowId)) {
+        return prev.filter(id => id !== rowId)
+      } else {
+        return [...prev, rowId]
+      }
+    })
+  }
+
+  const handleSelectAll = (rowIds, checked) => {
+    if (checked) {
+      setSelectedRows(prev => [...new Set([...prev, ...rowIds])])
+    } else {
+      setSelectedRows(prev => prev.filter(id => !rowIds.includes(id)))
+    }
+  }
+
+  const bulkDelete = () => {
+    if (selectedRows.length === 0) {
+      showNotification('No rows selected!')
+      return
+    }
+
+    if (confirm(`Are you sure you want to delete ${selectedRows.length} test case(s)?`)) {
+      const newTestData = testData.filter(test => {
+        const rowId = `${test.category}-${test.task}-${test.owner}`
+        return !selectedRows.includes(rowId)
+      })
+      setTestData(newTestData)
+      setSelectedRows([])
+      showNotification(`Successfully deleted ${selectedRows.length} test case(s)!`)
+    }
+  }
+
+  const clearSelection = () => {
+    setSelectedRows([])
+  }
+
   return (
     <div className="app-container">
       <div className="container">
-        <Header />
+        <Header
+          settings={projectSettings}
+          onOpenSettings={() => openModal('projectSettings')}
+          darkMode={darkMode}
+          onToggleDarkMode={toggleDarkMode}
+        />
         <OverviewCards testData={testData} filteredData={filteredData} columns={columns} />
         <ArchitectureSection />
+
+        {/* Bulk Actions Bar */}
+        {selectedRows.length > 0 && (
+          <div className="bulk-actions-bar">
+            <span className="bulk-selected-count">
+              {selectedRows.length} item(s) selected
+            </span>
+            <div className="bulk-actions-buttons">
+              <button className="btn btn-danger" onClick={bulkDelete}>
+                🗑️ Delete Selected
+              </button>
+              <button className="btn btn-secondary" onClick={clearSelection}>
+                Clear Selection
+              </button>
+            </div>
+          </div>
+        )}
+
         <ControlPanel
           filters={filters}
           updateFilters={updateFilters}
@@ -213,6 +322,10 @@ function App() {
           columns={columns}
           openModal={openModal}
           setEditingTest={setEditingTest}
+          settings={projectSettings}
+          selectedRows={selectedRows}
+          onSelectRow={handleSelectRow}
+          onSelectAll={handleSelectAll}
         />
       </div>
 
@@ -262,6 +375,14 @@ function App() {
           onClose={() => closeModal('columnConfig')}
           onSave={updateColumns}
           onAddColumn={addColumn}
+        />
+      )}
+
+      {modals.projectSettings && (
+        <ProjectSettingsModal
+          settings={projectSettings}
+          onClose={() => closeModal('projectSettings')}
+          onSave={saveProjectSettings}
         />
       )}
 
