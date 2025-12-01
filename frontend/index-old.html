@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Release Testing Tracker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Release Testing Tracker</h1>
+            <p class="subtitle">Comprehensive testing management for FortiAuthenticator & FortiGate releases</p>
+        </header>
+
+        <section class="overview-grid" aria-label="Executive overview">
+            <div class="overview-card">
+                <div class="pill">Release health</div>
+                <h3>RC quality guardrail</h3>
+                <p>Live signal from the test matrix to keep release decisions grounded in measurable quality.</p>
+                <div class="metric-row">
+                    <div class="metric-label">Pass rate</div>
+                    <div class="metric-value" id="overviewPassRate">--%</div>
+                </div>
+                <div class="metric-row">
+                    <div class="metric-label">Tracked scenarios</div>
+                    <div class="metric-value" id="overviewTotalScenarios">--</div>
+                </div>
+                <div class="metric-row">
+                    <div class="metric-label">Active owners</div>
+                    <div class="metric-value" id="overviewOwners">--</div>
+                </div>
+            </div>
+
+            <div class="overview-card">
+                <div class="pill success">AI copilot</div>
+                <h3>Usage & governance</h3>
+                <p>Tracks who is invoking AI, on which task, and the footprint it leaves (tokens, cost, and latency).</p>
+                <div class="metric-row">
+                    <div class="metric-label">API calls (24h)</div>
+                    <div class="metric-value" id="overviewAiCalls">--</div>
+                </div>
+                <div class="metric-row">
+                    <div class="metric-label">Avg latency</div>
+                    <div class="metric-value" id="overviewAiLatency">--</div>
+                </div>
+                <div class="metric-row">
+                    <div class="metric-label">Tokens burned</div>
+                    <div class="metric-value" id="overviewAiTokens">--k</div>
+                </div>
+            </div>
+
+            <div class="overview-card">
+                <div class="pill ghost">Identity</div>
+                <h3>User authentication readiness</h3>
+                <p>Email/password login with secure hashing, verification flow, session rotation, and audit trails baked in.</p>
+                <div class="metric-row">
+                    <div class="metric-label">Verified users</div>
+                    <div class="metric-value" id="overviewUsers">--</div>
+                </div>
+                <div class="metric-row">
+                    <div class="metric-label">Active sessions</div>
+                    <div class="metric-value" id="overviewSessions">--</div>
+                </div>
+                <div class="metric-row">
+                    <div class="metric-label">Lockouts</div>
+                    <div class="metric-value" id="overviewLockouts">--</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="architecture-section" aria-label="Backend blueprint">
+            <div class="architecture-header">
+                <div class="architecture-title">
+                    <h2>Mongo-backed, AI-aware service layer</h2>
+                    <span>Purpose-built APIs for release test tracking, AI usage metering, and identity with auditability.</span>
+                </div>
+                <div class="pill">v1 design</div>
+            </div>
+            <div class="architecture-grid">
+                <div class="architecture-card">
+                    <h4>Data platform</h4>
+                    <ul class="blueprint-list">
+                        <li><span class="chip">MongoDB</span>Document-first schemas for <strong>users</strong>, <strong>testSuites</strong>, <strong>testRuns</strong>, <strong>aiUsageLogs</strong>, <strong>reports</strong>, and <strong>auditEvents</strong>.</li>
+                        <li><span class="chip">Indexes</span>Compound keys on <code>owner+category</code>, <code>rc</code>, and <code>createdAt</code> for quick slicing.</li>
+                        <li><span class="chip">Retention</span>TTL on usage logs and sessions; soft-deletes on tests with history snapshots.</li>
+                    </ul>
+                </div>
+                <div class="architecture-card">
+                    <h4>Service surface</h4>
+                    <ul class="blueprint-list">
+                        <li><span class="chip">Release API</span>CRUD for suites, cases, RC status updates, CSV ingest, and export.</li>
+                        <li><span class="chip">Metrics</span>Aggregate pass-rate endpoints and trend deltas per RC and owner.</li>
+                        <li><span class="chip">Report</span>Async job to prepare AI-ready summaries and deliver signed downloads.</li>
+                    </ul>
+                </div>
+                <div class="architecture-card">
+                    <h4>AI & usage governance</h4>
+                    <ul class="blueprint-list">
+                        <li><span class="chip">Task binding</span>Each call tagged with user, task ID, RC, tokens, cost, latency.</li>
+                        <li><span class="chip">Guardrails</span>Prompt templates per task type; role-based quotas and rate limits.</li>
+                        <li><span class="chip">Observability</span>Central log stream + anomaly alerts for latency or cost spikes.</li>
+                    </ul>
+                </div>
+                <div class="architecture-card">
+                    <h4>Identity & access</h4>
+                    <ul class="blueprint-list">
+                        <li><span class="chip">Email/password</span>BCrypt hashes, verification tokens, password resets with cooldown.</li>
+                        <li><span class="chip">Sessions</span>JWT access + refresh tokens, device binding, and rolling expiry.</li>
+                        <li><span class="chip">RBAC</span>Roles for viewer/reviewer/admin; audit trail for privileged actions.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <div class="controls">
+            <div class="control-group">
+                <div class="input-wrapper">
+                    <label for="search">Search</label>
+                    <input type="search" id="search" placeholder="Search tasks, owners, categories...">
+                </div>
+                <div class="input-wrapper">
+                    <label for="filterCategory">Category</label>
+                    <select id="filterCategory">
+                        <option value="">All Categories</option>
+                        <option value="FortiAuthenticator">FortiAuthenticator</option>
+                        <option value="FortiAuthenticator HA">FortiAuthenticator HA</option>
+                        <option value="FIC Admin Portal">FIC Admin Portal</option>
+                        <option value="FIC Regression Mantis">FIC Regression Mantis</option>
+                        <option value="Fortitoken">Fortitoken</option>
+                        <option value="Fortigate">Fortigate</option>
+                        <option value="Fortigate HA">Fortigate HA</option>
+                        <option value="Sub User">Sub User</option>
+                    </select>
+                </div>
+                <div class="input-wrapper">
+                    <label for="filterOwner">Owner</label>
+                    <select id="filterOwner">
+                        <option value="">All Owners</option>
+                        <option value="Nirmal">Nirmal</option>
+                        <option value="Shubo">Shubo</option>
+                        <option value="Priya">Priya</option>
+                        <option value="Kevin">Kevin</option>
+                    </select>
+                </div>
+                <div class="input-wrapper">
+                    <label for="filterRC">Release Candidate</label>
+                    <select id="filterRC">
+                        <option value="">All RCs</option>
+                        <option value="RC1">RC1</option>
+                        <option value="RC2">RC2</option>
+                        <option value="RC3">RC3</option>
+                        <option value="RC4">RC4</option>
+                        <option value="RC5">RC5</option>
+                        <option value="RC6">RC6</option>
+                    </select>
+                </div>
+                <div class="input-wrapper">
+                    <label for="filterStatus">Status</label>
+                    <select id="filterStatus">
+                        <option value="">All Statuses</option>
+                        <option value="pass">Pass</option>
+                        <option value="fail">Fail</option>
+                        <option value="pending">Pending</option>
+                    </select>
+                </div>
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="applyFilters()"><span>Apply Filters</span></button>
+                <button class="btn-secondary" onclick="clearFilters()"><span>Clear All</span></button>
+                <button class="btn-primary" onclick="openAddTestCase()"><span>➕ Add Test Case</span></button>
+                <button class="btn-secondary" onclick="document.getElementById('uploadFile').click()"><span>📤 Upload CSV</span></button>
+                <button class="btn-ai" onclick="openAIAnalysis()"><span>🤖 AI Analysis</span></button>
+                <button class="btn-primary" onclick="generateTestReport()"><span>📄 Generate Report</span></button>
+                <button class="btn-secondary" onclick="openHistory()"><span>📊 History</span></button>
+                <button class="btn-secondary" onclick="exportData()"><span>💾 Export</span></button>
+            </div>
+            <input type="file" id="uploadFile" accept=".csv" style="display: none;" onchange="handleFileUpload(event)">
+            <div id="activeFilters" style="margin-top: 15px;"></div>
+        </div>
+
+        <div class="stats-grid" id="statsGrid">
+            <!-- Stats will be dynamically populated -->
+        </div>
+
+        <div class="data-table-wrapper">
+            <div class="table-header">
+                <div class="table-title">Test Cases</div>
+                <div style="color: var(--text-muted); font-size: 0.9rem;">
+                    Showing <span id="resultCount">0</span> results
+                </div>
+            </div>
+            <div class="table-container">
+                <table id="testTable">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="category">Category</th>
+                            <th class="sortable" data-sort="task">Task</th>
+                            <th class="sortable" data-sort="owner">Owner</th>
+                            <th class="sortable" data-sort="rc1">RC1</th>
+                            <th class="sortable" data-sort="rc2">RC2</th>
+                            <th class="sortable" data-sort="rc3">RC3</th>
+                            <th class="sortable" data-sort="rc4">RC4</th>
+                            <th class="sortable" data-sort="rc5">RC5</th>
+                            <th class="sortable" data-sort="rc6">RC6</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Data will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Analysis Modal -->
+    <div class="modal" id="aiModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">🤖 AI Analysis</h2>
+                <button class="close-modal" onclick="closeModal('aiModal')">×</button>
+            </div>
+            <div id="aiContent">
+                <div class="loading"></div> Analyzing test data...
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div class="modal" id="historyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">📊 Release History</h2>
+                <button class="close-modal" onclick="closeModal('historyModal')">×</button>
+            </div>
+            <div id="historyContent">
+                <!-- History timeline will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Test Case Modal -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">✏️ Edit Test Case</h2>
+                <button class="close-modal" onclick="closeModal('editModal')">×</button>
+            </div>
+            <form id="editForm" onsubmit="saveTestCase(event)">
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="editCategory" required>
+                        <option value="FortiAuthenticator">FortiAuthenticator</option>
+                        <option value="FortiAuthenticator HA">FortiAuthenticator HA</option>
+                        <option value="FIC Admin Portal">FIC Admin Portal</option>
+                        <option value="FIC Regression Mantis">FIC Regression Mantis</option>
+                        <option value="Fortitoken">Fortitoken</option>
+                        <option value="Fortigate">Fortigate</option>
+                        <option value="Fortigate HA">Fortigate HA</option>
+                        <option value="Sub User">Sub User</option>
+                        <option value="SCIM">SCIM</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Task Name</label>
+                    <textarea id="editTask" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Owner</label>
+                    <select id="editOwner" required>
+                        <option value="Nirmal">Nirmal</option>
+                        <option value="Shubo">Shubo</option>
+                        <option value="Priya">Priya</option>
+                        <option value="Kevin">Kevin</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Release Candidate Status</label>
+                    <div class="rc-status-grid">
+                        <div>
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">RC1</label>
+                            <select id="editRC1">
+                                <option value="">Not Tested</option>
+                                <option value="pass">Pass</option>
+                                <option value="fail">Fail</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">RC2</label>
+                            <select id="editRC2">
+                                <option value="">Not Tested</option>
+                                <option value="pass">Pass</option>
+                                <option value="fail">Fail</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">RC3</label>
+                            <select id="editRC3">
+                                <option value="">Not Tested</option>
+                                <option value="pass">Pass</option>
+                                <option value="fail">Fail</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">RC4</label>
+                            <select id="editRC4">
+                                <option value="">Not Tested</option>
+                                <option value="pass">Pass</option>
+                                <option value="fail">Fail</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">RC5</label>
+                            <select id="editRC5">
+                                <option value="">Not Tested</option>
+                                <option value="pass">Pass</option>
+                                <option value="fail">Fail</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">RC6</label>
+                            <select id="editRC6">
+                                <option value="">Not Tested</option>
+                                <option value="pass">Pass</option>
+                                <option value="fail">Fail</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Mantis Bug IDs (comma-separated for failures)</label>
+                    <input type="text" id="editMantis" placeholder="e.g., 1206493, 1209255">
+                    <div class="mantis-info-text" style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">
+                        Enter Mantis bug IDs for any failed test cases. Multiple IDs can be separated by commas.
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="editNotes" placeholder="Additional notes or comments about this test case..."></textarea>
+                </div>
+
+                <input type="hidden" id="editIndex">
+
+                <div class="button-group" style="margin-top: 24px;">
+                    <button type="submit" class="btn-primary"><span>Save Changes</span></button>
+                    <button type="button" class="btn-secondary" onclick="closeModal('editModal')"><span>Cancel</span></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Test Case Modal -->
+    <div class="modal" id="addModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">➕ Add New Test Case</h2>
+                <button class="close-modal" onclick="closeModal('addModal')">×</button>
+            </div>
+            <form id="addForm" onsubmit="addTestCase(event)">
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="addCategory" required>
+                        <option value="">Select Category</option>
+                        <option value="FortiAuthenticator">FortiAuthenticator</option>
+                        <option value="FortiAuthenticator HA">FortiAuthenticator HA</option>
+                        <option value="FIC Admin Portal">FIC Admin Portal</option>
+                        <option value="FIC Regression Mantis">FIC Regression Mantis</option>
+                        <option value="Fortitoken">Fortitoken</option>
+                        <option value="Fortigate">Fortigate</option>
+                        <option value="Fortigate HA">Fortigate HA</option>
+                        <option value="Sub User">Sub User</option>
+                        <option value="SCIM">SCIM</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Task Name</label>
+                    <textarea id="addTask" required placeholder="Enter test case description..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Owner</label>
+                    <select id="addOwner" required>
+                        <option value="">Select Owner</option>
+                        <option value="Nirmal">Nirmal</option>
+                        <option value="Shubo">Shubo</option>
+                        <option value="Priya">Priya</option>
+                        <option value="Kevin">Kevin</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Release Candidate Status</label>
+                    <div class="rc-status-grid">
+                        <div>
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">RC1</label>
+                            <select id="addRC1">
+                                <option value="">Not Tested</option>
+                                <option value="pass">Pass</option>
+                                <option value="fail">Fail</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">RC2</label>
+                            <select id="addRC2">
+                                <option value="">Not Tested</option>
+                                <option value="pass">Pass</option>
+                                <option value="fail">Fail</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">RC3</label>
+                            <select id="addRC3">
+                                <option value="">Not Tested</option>
+                                <option value="pass">Pass</option>
+                                <option value="fail">Fail</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">RC4</label>
+                            <select id="addRC4">
+                                <option value="">Not Tested</option>
+                                <option value="pass">Pass</option>
+                                <option value="fail">Fail</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">RC5</label>
+                            <select id="addRC5">
+                                <option value="">Not Tested</option>
+                                <option value="pass">Pass</option>
+                                <option value="fail">Fail</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">RC6</label>
+                            <select id="addRC6">
+                                <option value="">Not Tested</option>
+                                <option value="pass">Pass</option>
+                                <option value="fail">Fail</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Mantis Bug IDs (comma-separated for failures)</label>
+                    <input type="text" id="addMantis" placeholder="e.g., 1206493, 1209255">
+                    <div class="mantis-info-text" style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">
+                        Enter Mantis bug IDs for any failed test cases. Multiple IDs can be separated by commas.
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="addNotes" placeholder="Additional notes or comments about this test case..."></textarea>
+                </div>
+
+                <div class="button-group" style="margin-top: 24px;">
+                    <button type="submit" class="btn-primary"><span>Add Test Case</span></button>
+                    <button type="button" class="btn-secondary" onclick="closeModal('addModal')"><span>Cancel</span></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Upload CSV Modal -->
+    <div class="modal" id="uploadModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">📤 Upload Test Cases (CSV)</h2>
+                <button class="close-modal" onclick="closeModal('uploadModal')">×</button>
+            </div>
+            
+            <div class="upload-instructions">
+                <h4>CSV Format Instructions</h4>
+                <p>Your CSV file should have the following columns in this exact order:</p>
+                <p><code>Category, Task, Owner, RC1, RC2, RC3, RC4, RC5, RC6, Mantis, Notes</code></p>
+                <p style="margin-top: 12px;"><strong>Example:</strong></p>
+                <p><code>Fortigate,User MFA with Email,Shubo,pass,pass,pass,pass,pass,pass,,</code></p>
+                <p style="margin-top: 12px; font-size: 0.8rem; color: var(--text-muted);">
+                    • RC columns should contain: <code>pass</code>, <code>fail</code>, or leave empty<br>
+                    • Mantis IDs can be comma-separated (use semicolon if in CSV): <code>1206493;1209255</code><br>
+                    • Notes are optional
+                </p>
+                <button class="btn-secondary" onclick="downloadTemplate()" style="margin-top: 12px;">
+                    <span>⬇️ Download CSV Template</span>
+                </button>
+            </div>
+
+            <div id="csvPreviewSection" style="display: none;">
+                <h4 style="color: var(--accent-primary); margin-bottom: 12px; font-size: 1rem;">Preview</h4>
+                <div id="csvPreview" class="csv-preview"></div>
+                <div class="button-group" style="margin-top: 20px;">
+                    <button class="btn-primary" onclick="confirmUpload()"><span>✓ Confirm Import</span></button>
+                    <button class="btn-secondary" onclick="cancelUpload()"><span>Cancel</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Report Modal -->
+    <div class="modal" id="reportModal">
+        <div class="modal-content" style="max-width: 1200px;">
+            <div class="modal-header">
+                <h2 class="modal-title">📄 AI-Generated Test Report</h2>
+                <button class="close-modal" onclick="closeModal('reportModal')">×</button>
+            </div>
+            
+            <div id="reportGenerating" style="text-align: center; padding: 40px;">
+                <div class="loading"></div>
+                <p style="margin-top: 20px; color: var(--text-secondary);">Generating comprehensive test report...</p>
+            </div>
+
+            <div id="reportContent" style="display: none;">
+                <div class="button-group" style="margin-bottom: 20px;">
+                    <button class="btn-primary" onclick="downloadReportPDF()"><span>📥 Download PDF</span></button>
+                    <button class="btn-secondary" onclick="downloadReportWord()"><span>📥 Download Word</span></button>
+                    <button class="btn-secondary" onclick="copyReportToClipboard()"><span>📋 Copy to Clipboard</span></button>
+                </div>
+                
+                <div id="reportBody" style="background: var(--bg-primary); padding: 30px; border-radius: 6px; border: 1px solid var(--border); font-family: 'Inter', sans-serif; line-height: 1.8;">
+                    <!-- Report content will be generated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="./app.js"></script>
+</body>
+</html>
