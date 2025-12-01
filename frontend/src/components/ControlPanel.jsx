@@ -1,7 +1,22 @@
-import { useRef } from 'react'
+import { useRef, useState, useEffect } from 'react'
 
 function ControlPanel({ filters, updateFilters, clearFilters, openModal, exportData, handleCsvImport }) {
   const fileInputRef = useRef(null)
+  const [searchInput, setSearchInput] = useState(filters.search)
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      updateFilters({ search: searchInput })
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  // Sync with external filter changes
+  useEffect(() => {
+    setSearchInput(filters.search)
+  }, [filters.search])
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0]
@@ -88,8 +103,8 @@ FIC Admin Portal,Example test case 3,Kevin,fail,pass,pass,pass,,,1234567,"Bug fi
             type="search"
             id="search"
             placeholder="Search tasks, owners, categories..."
-            value={filters.search}
-            onChange={(e) => updateFilters({ search: e.target.value })}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
         <div className="input-wrapper">
