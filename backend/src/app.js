@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import releasesRouter from './routes/releases.js';
+import projectsRouter from './routes/projects.js';
 
 export function buildApp() {
   const app = express();
@@ -10,6 +11,7 @@ export function buildApp() {
   app.use(express.json());
   app.use(morgan('dev'));
 
+  app.use('/api/projects', projectsRouter);
   app.use('/api/releases', releasesRouter);
 
   app.use((err, req, res, next) => {

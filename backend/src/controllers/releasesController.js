@@ -2,7 +2,9 @@ import { Release } from '../models/Release.js';
 
 export async function listReleases(req, res, next) {
   try {
-    const releases = await Release.find().sort({ updatedAt: -1 });
+    const { projectId } = req.query;
+    const query = projectId ? { projectId } : {};
+    const releases = await Release.find(query).sort({ updatedAt: -1 });
     res.json(releases);
   } catch (error) {
     next(error);

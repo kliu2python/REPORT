@@ -5,6 +5,7 @@ import ArchitectureSection from './components/ArchitectureSection'
 import ControlPanel from './components/ControlPanel'
 import StatsGrid from './components/StatsGrid'
 import TestTable from './components/TestTable'
+import ProjectSelector from './components/ProjectSelector'
 import AddTestCaseModal from './components/modals/AddTestCaseModal'
 import EditTestCaseModal from './components/modals/EditTestCaseModal'
 import AIAnalysisModal from './components/modals/AIAnalysisModal'
@@ -12,22 +13,18 @@ import HistoryModal from './components/modals/HistoryModal'
 import ReportModal from './components/modals/ReportModal'
 import ColumnConfigModal from './components/modals/ColumnConfigModal'
 import ProjectSettingsModal from './components/modals/ProjectSettingsModal'
+import ProjectManagementModal from './components/modals/ProjectManagementModal'
 import Notification from './components/Notification'
 import { testDataInitial } from './data/testData'
 import './App.css'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+
 function App() {
-  // Project settings with localStorage persistence
-  const [projectSettings, setProjectSettings] = useState(() => {
-    const saved = localStorage.getItem('projectSettings')
-    return saved ? JSON.parse(saved) : {
-      projectName: 'Release Testing Tracker',
-      projectSubtitle: 'Comprehensive testing management system',
-      organizationName: 'Your Organization',
-      bugTrackerUrl: 'https://mantis.fortinet.com/bug_view_page.php?bug_id=',
-      defaultItemsPerPage: 25
-    }
-  })
+  // Multi-project state
+  const [projects, setProjects] = useState([])
+  const [currentProject, setCurrentProject] = useState(null)
+  const [loadingProjects, setLoadingProjects] = useState(true)
 
   // Dark mode with localStorage persistence
   const [darkMode, setDarkMode] = useState(() => {
@@ -67,17 +64,26 @@ function App() {
     history: false,
     report: false,
     columnConfig: false,
-    projectSettings: false
+    projectSettings: false,
+    projectManagement: false
   })
 
   const [editingTest, setEditingTest] = useState(null)
   const [notification, setNotification] = useState(null)
 
-  // Save settings to localStorage
+  // Fetch projects on mount
   useEffect(() => {
-    localStorage.setItem('projectSettings', JSON.stringify(projectSettings))
-  }, [projectSettings])
+    fetchProjects()
+  }, [])
 
+  // Load project data when current project changes
+  useEffect(() => {
+    if (currentProject) {
+      loadProjectData(currentProject)
+    }
+  }, [currentProject])
+
+  // Save dark mode to localStorage
   useEffect(() => {
     localStorage.setItem('darkMode', JSON.stringify(darkMode))
     if (darkMode) {
@@ -91,6 +97,62 @@ function App() {
   useEffect(() => {
     applyFilters()
   }, [filters, testData])
+
+  const fetchProjects = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/projects`)
+      const data = await response.json()
+      setProjects(data)
+
+      // Load last selected project or first project
+      const lastProjectId = localStorage.getItem('lastProjectId')
+      const projectToLoad = lastProjectId
+        ? data.find(p => p._id === lastProjectId) || data[0]
+        : data[0]
+
+      if (projectToLoad) {
+        setCurrentProject(projectToLoad)
+      } else if (data.length === 0) {
+        // No projects exist, show empty state
+        setLoadingProjects(false)
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error)
+      showNotification('Error loading projects')
+      setLoadingProjects(false)
+    }
+  }
+
+  const loadProjectData = (project) => {
+    // Load project settings
+    if (project.settings) {
+      // Settings are now part of the project in the database
+    }
+
+    // Load project columns
+    if (project.columns && project.columns.length > 0) {
+      setColumns(project.columns)
+    }
+
+    // Load test data from localStorage for this project
+    const savedData = localStorage.getItem(`testData_${project._id}`)
+    if (savedData) {
+      setTestData(JSON.parse(savedData))
+    } else {
+      setTestData([])
+    }
+
+    // Save last project selection
+    localStorage.setItem('lastProjectId', project._id)
+    setLoadingProjects(false)
+  }
+
+  // Save test data to localStorage whenever it changes
+  useEffect(() => {
+    if (currentProject) {
+      localStorage.setItem(`testData_${currentProject._id}`, JSON.stringify(testData))
+    }
+  }, [testData, currentProject])
 
   const applyFilters = () => {
     let filtered = testData.filter(row => {
@@ -199,14 +261,28 @@ function App() {
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'release-testing-data.csv'
+    a.download = `${currentProject?.name || 'project'}-testing-data.csv`
     a.click()
     window.URL.revokeObjectURL(url)
     showNotification('Data exported successfully!')
   }
 
-  const updateColumns = (newColumns) => {
+  const updateColumns = async (newColumns) => {
     setColumns(newColumns)
+
+    // Update project in database
+    if (currentProject) {
+      try {
+        await fetch(`${API_URL}/api/projects/${currentProject._id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ columns: newColumns })
+        })
+      } catch (error) {
+        console.error('Error updating columns:', error)
+      }
+    }
+
     closeModal('columnConfig')
     showNotification('Column configuration updated!')
   }
@@ -233,10 +309,27 @@ function App() {
     setDarkMode(!darkMode)
   }
 
-  const saveProjectSettings = (newSettings) => {
-    setProjectSettings(newSettings)
-    closeModal('projectSettings')
-    showNotification('Project settings saved successfully!')
+  const saveProjectSettings = async (newSettings) => {
+    if (!currentProject) return
+
+    try {
+      const response = await fetch(`${API_URL}/api/projects/${currentProject._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: newSettings })
+      })
+
+      if (response.ok) {
+        const updatedProject = await response.json()
+        setCurrentProject(updatedProject)
+        setProjects(projects.map(p => p._id === updatedProject._id ? updatedProject : p))
+        closeModal('projectSettings')
+        showNotification('Project settings saved successfully!')
+      }
+    } catch (error) {
+      console.error('Error saving project settings:', error)
+      showNotification('Error saving project settings')
+    }
   }
 
   const handleSelectRow = (rowId) => {
@@ -278,9 +371,137 @@ function App() {
     setSelectedRows([])
   }
 
+  // Project management functions
+  const handleSelectProject = (project) => {
+    setCurrentProject(project)
+  }
+
+  const handleSaveProject = async (projectData, editingId) => {
+    try {
+      if (editingId) {
+        // Update existing project
+        const response = await fetch(`${API_URL}/api/projects/${editingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(projectData)
+        })
+
+        if (response.ok) {
+          const updatedProject = await response.json()
+          setProjects(projects.map(p => p._id === editingId ? updatedProject : p))
+          if (currentProject?._id === editingId) {
+            setCurrentProject(updatedProject)
+          }
+          showNotification('Project updated successfully!')
+        }
+      } else {
+        // Create new project
+        const response = await fetch(`${API_URL}/api/projects`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(projectData)
+        })
+
+        if (response.ok) {
+          const newProject = await response.json()
+          setProjects([...projects, newProject])
+          setCurrentProject(newProject)
+          showNotification('Project created successfully!')
+        }
+      }
+      await fetchProjects()
+    } catch (error) {
+      console.error('Error saving project:', error)
+      showNotification('Error saving project')
+    }
+  }
+
+  const handleDeleteProject = async (projectId) => {
+    try {
+      const response = await fetch(`${API_URL}/api/projects/${projectId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        const updatedProjects = projects.filter(p => p._id !== projectId)
+        setProjects(updatedProjects)
+
+        // If deleting current project, switch to first available
+        if (currentProject?._id === projectId) {
+          setCurrentProject(updatedProjects[0] || null)
+        }
+
+        showNotification('Project deleted successfully!')
+      }
+    } catch (error) {
+      console.error('Error deleting project:', error)
+      showNotification('Error deleting project')
+    }
+  }
+
+  // Show loading or empty state
+  if (loadingProjects) {
+    return (
+      <div className="app-container">
+        <div className="container">
+          <div className="empty-state">
+            <p>Loading projects...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!currentProject && projects.length === 0) {
+    return (
+      <div className="app-container">
+        <div className="container">
+          <div className="empty-state">
+            <h2>Welcome to Release Testing Tracker</h2>
+            <p>No projects found. Create your first project to get started!</p>
+            <button
+              className="btn btn-primary"
+              onClick={() => openModal('projectManagement')}
+            >
+              Create Project
+            </button>
+          </div>
+        </div>
+
+        {modals.projectManagement && (
+          <ProjectManagementModal
+            projects={projects}
+            currentProjectId={currentProject?._id}
+            onClose={() => closeModal('projectManagement')}
+            onSave={handleSaveProject}
+            onDelete={handleDeleteProject}
+          />
+        )}
+      </div>
+    )
+  }
+
+  const projectSettings = currentProject?.settings || {
+    projectName: currentProject?.name || 'Release Testing Tracker',
+    projectSubtitle: '',
+    organizationName: '',
+    bugTrackerUrl: 'https://mantis.fortinet.com/bug_view_page.php?bug_id=',
+    defaultItemsPerPage: 25
+  }
+
   return (
     <div className="app-container">
       <div className="container">
+        {/* Project Selector */}
+        <div style={{ marginBottom: '20px' }}>
+          <ProjectSelector
+            projects={projects}
+            currentProject={currentProject}
+            onSelectProject={handleSelectProject}
+            onManageProjects={() => openModal('projectManagement')}
+          />
+        </div>
+
         <Header
           settings={projectSettings}
           onOpenSettings={() => openModal('projectSettings')}
@@ -298,7 +519,7 @@ function App() {
             </span>
             <div className="bulk-actions-buttons">
               <button className="btn btn-danger" onClick={bulkDelete}>
-                🗑️ Delete Selected
+                Delete Selected
               </button>
               <button className="btn btn-secondary" onClick={clearSelection}>
                 Clear Selection
@@ -383,6 +604,16 @@ function App() {
           settings={projectSettings}
           onClose={() => closeModal('projectSettings')}
           onSave={saveProjectSettings}
+        />
+      )}
+
+      {modals.projectManagement && (
+        <ProjectManagementModal
+          projects={projects}
+          currentProjectId={currentProject?._id}
+          onClose={() => closeModal('projectManagement')}
+          onSave={handleSaveProject}
+          onDelete={handleDeleteProject}
         />
       )}
 
